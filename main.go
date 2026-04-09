@@ -1,44 +1,63 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type Todo struct {
-	ID int
-	Text string
-	Done bool
+	ID int `json:"id"`
+	Text string `json:"text"`
+	Done bool `json:"done"`
 }
 
-func add_todo(todos []Todo, todo_text string) []Todo {
-	thisid := len(todos) + 1
-
+func add_todo(todos []Todo, task string) {
 	todo := Todo{
-		ID: thisid,
-		Text: todo_text,
+		ID: len(todos) + 1,
+		Text: task,
 		Done: false,
 	}
 
 	todos = append(todos, todo)
 
-	return todos
+	marshaled_todos, ms_err := json.MarshalIndent(todos, "", "    ")
+	if ms_err != nil {
+		fmt.Println(ms_err)
+		return
+	}
+
+	os.WriteFile("todo_list.json", marshaled_todos, 0666)
 }
 
-func delete_todo(todos []Todo, id int) []Todo {
-
+func delete_todo(todos []Todo, id int) {
+	
 	result := []Todo{}
+	set_id := 1
 
-	for _, todo := range todos {
-		if todo.ID != id {
+	for i, todo := range todos {
+
+		fmt.Println(set_id)
+		if todos[i].ID != id {
+
+			todo.ID = set_id
+			set_id += 1
+
 			result = append(result, todo)
 		}
 	}
 
-	return result
+	marshaled_todos, ms_err := json.MarshalIndent(result, "", "    ")
+	if ms_err != nil {
+		fmt.Println(ms_err)
+		return
+	}
+
+	os.WriteFile("todo_list.json", marshaled_todos, 0666)
 }
 
-func complete_task(todos []Todo, id int) []Todo {
+func complete_task(todos []Todo, id int) {
 
 	for i := range todos {
 
@@ -48,24 +67,25 @@ func complete_task(todos []Todo, id int) []Todo {
 		}
 	}
 
-	return todos
-}
-
-func print_todos(todos []Todo) {
-	
-	if len(todos) == 0 {
-		fmt.Println("Not found todo")
+	marshaled_todos, ms_err := json.MarshalIndent(todos, "", "    ")
+	if ms_err != nil {
+		fmt.Println(ms_err)
 		return
 	}
 
-	for _, todo := range todos {
-		status := " "
+	os.WriteFile("todo_list.json", marshaled_todos, 0666)
+}
 
+func print_todos(todos []Todo) {
+
+	for _, todo := range todos {
+
+		completed := " "
 		if todo.Done == true {
-			status = "✓"
+			completed = "✓"
 		}
 
-		fmt.Printf("[%s] %d: %s\n", status, todo.ID, todo.Text)
+		fmt.Printf("[%s]%d: %s\n", completed, todo.ID, todo.Text)
 	}
 	// %s 文字列
 	// %d 整数
@@ -75,7 +95,7 @@ func print_todos(todos []Todo) {
 	// %t Bool
 }
 
-func arg_commands(todos []Todo, Args []string) {
+func arg_commands(Args []string) {
 	if len(Args) <= 2 {
 		fmt.Println("Type: todo (list | add <task> | delete <id> | complete <id>)")
 		return
@@ -86,6 +106,19 @@ func arg_commands(todos []Todo, Args []string) {
 	}
 	commands := Args[2]
 
+	todos_bytes, read_err := os.ReadFile("todo_list.json")
+	if read_err != nil {
+		fmt.Println(read_err)
+		return
+	}
+
+	var todos []Todo
+	// bytes -> json 変換
+	unms_err := json.Unmarshal(todos_bytes, &todos)
+	if unms_err != nil {
+		fmt.Println(unms_err)
+	}
+
 	switch commands {
 	case "add":
 		if len(Args) <= 3 {
@@ -94,7 +127,10 @@ func arg_commands(todos []Todo, Args []string) {
 		}
 
 		task := Args[3]
-		fmt.Printf("add task \"%s\"", task)
+
+		fmt.Printf("add task \"%s\"\n", task)
+
+		add_todo(todos, task)
 
 		return
 
@@ -104,10 +140,17 @@ func arg_commands(todos []Todo, Args []string) {
 			return
 		}
 
-		id := Args[3]
-		fmt.Printf("delete task id: %s", id)
+		id_string := Args[3]
 
-		return
+		id, conv_err := strconv.Atoi(id_string)
+		if conv_err != nil {
+			fmt.Println(conv_err)
+			return
+		}
+
+		delete_todo(todos, id)
+
+		fmt.Printf("delete task id: %d\n", id)
 
 	case "complete":
 		if len(Args) <= 3 {
@@ -115,51 +158,33 @@ func arg_commands(todos []Todo, Args []string) {
 			return
 		}
 
-		id := Args[3]
-		fmt.Printf("complete task id: %s", id)
+		id_string := Args[3]
 
-		return
+		id, conv_err := strconv.Atoi(id_string)
+		if conv_err != nil {
+			fmt.Println(conv_err)
+			return
+		}
+
+		complete_task(todos, id)
+
+		fmt.Printf("complete task id: %d\n", id)
 
 	case "list":
 		fmt.Println("list")
-		
-		for _, todo := range todos {
-			completed := " "
-			if todo.Done == true {
-				completed = "✓"
-			}
-			fmt.Printf("[%s]%d: %s\n", completed, todo.ID, todo.Text)
-		}
+
+		print_todos(todos)
 
 		return
 
 	default:
 		fmt.Println("this command not found\nType: todo (list | add <task> | delete <id> | complete <id>)")
-
-		return
 	}
 }
 
 func main() {
 
-	todos := []Todo{}
+	arg_commands(os.Args)
 
-	newtodo := "コード書く"
-
-	// append は新しい領域で変更を加える場合があるため
-	// 更新後のtodosを返し適応する
-	todos = add_todo(todos, newtodo)
-	newtodo = "ピスタチオ食べる"
-	todos = add_todo(todos, newtodo)
-	newtodo = "コミットする"
-	todos = add_todo(todos, newtodo)
-
-	complete_task_id := 1
-	todos = complete_task(todos, complete_task_id)
-	complete_task_id = 3
-	todos = complete_task(todos, complete_task_id)
-
-	arg_commands(todos, os.Args)
-
-	//print_todos(todos)
+	fmt.Println("Finished")
 }
