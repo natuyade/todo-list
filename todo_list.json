@@ -2,7 +2,7 @@
     {
         "id": 1,
         "text": "コード書く",
-        "done": true
+        "done": false
     },
     {
         "id": 2,
@@ -12,16 +12,16 @@
     {
         "id": 3,
         "text": "コミットする",
-        "done": true
+        "done": false
     },
     {
         "id": 4,
         "text": "ご飯食べる",
-        "done": true
+        "done": false
     },
     {
         "id": 5,
         "text": "json変換を実装",
-        "done": true
+        "done": false
     }
 ]

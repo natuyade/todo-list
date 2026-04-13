@@ -15,7 +15,7 @@ type Todo struct {
 	Done bool `json:"done"`
 }
 
-func add_todo(todos []Todo, task string) {
+func addTodo(todos []Todo, task string) {
 	todo := Todo{
 		ID: len(todos) + 1,
 		Text: task,
@@ -33,7 +33,7 @@ func add_todo(todos []Todo, task string) {
 	os.WriteFile("todo_list.json", marshaled_todos, 0666)
 }
 
-func delete_todo(todos []Todo, id int) {
+func deleteTodo(todos []Todo, id int) {
 	
 	result := []Todo{}
 	set_id := 1
@@ -59,7 +59,7 @@ func delete_todo(todos []Todo, id int) {
 	os.WriteFile("todo_list.json", marshaled_todos, 0666)
 }
 
-func complete_task(todos []Todo, id int) {
+func completeTask(todos []Todo, id int) {
 
 	for i := range todos {
 
@@ -78,7 +78,7 @@ func complete_task(todos []Todo, id int) {
 	os.WriteFile("todo_list.json", marshaled_todos, 0666)
 }
 
-func print_todos(todos []Todo) {
+func printTodos(todos []Todo) {
 
 	for _, todo := range todos {
 
@@ -97,7 +97,8 @@ func print_todos(todos []Todo) {
 	// %t Bool
 }
 
-func arg_commands(Args []string) {
+func argCommands(Args []string) {
+	todos := []Todo{}
 	if len(Args) <= 2 {
 		fmt.Println("Type: todo (list | add <task> | delete <id> | complete <id>)")
 		return
@@ -107,19 +108,6 @@ func arg_commands(Args []string) {
 		return
 	}
 	commands := Args[2]
-
-	todos_bytes, read_err := os.ReadFile("todo_list.json")
-	if read_err != nil {
-		fmt.Println(read_err)
-		return
-	}
-
-	var todos []Todo
-	// bytes -> json 変換
-	unms_err := json.Unmarshal(todos_bytes, &todos)
-	if unms_err != nil {
-		fmt.Println(unms_err)
-	}
 
 	switch commands {
 	case "add":
@@ -132,7 +120,7 @@ func arg_commands(Args []string) {
 
 		fmt.Printf("add task \"%s\"\n", task)
 
-		add_todo(todos, task)
+		addTodo(todos, task)
 
 		return
 
@@ -150,7 +138,7 @@ func arg_commands(Args []string) {
 			return
 		}
 
-		delete_todo(todos, id)
+		deleteTodo(todos, id)
 
 		fmt.Printf("delete task id: %d\n", id)
 
@@ -168,14 +156,14 @@ func arg_commands(Args []string) {
 			return
 		}
 
-		complete_task(todos, id)
+		completeTask(todos, id)
 
 		fmt.Printf("complete task id: %d\n", id)
 
 	case "list":
 		fmt.Println("list")
 
-		print_todos(todos)
+		printTodos(todos)
 
 		return
 
@@ -193,23 +181,73 @@ func main() {
 }*/
 
 type model struct{
-	numbers []string
+	todos []Todo
 	cursor int
 	// mapはキーの型を自由に変えられる(stringならselected["yamada"]などで指定できる)
 	// [int]がキーの型, struct{}は値の型
 	selected map[int]struct{}
 }
 
-// init
+type todosLoadedMessage struct {
+	todos []Todo
+	Err error
+}
+
+func loadTodos() tea.Msg {
+	todos_bytes, read_err := os.ReadFile("todo_list.json")
+	if read_err != nil {
+		return todosLoadedMessage{
+			todos: nil,
+			Err: read_err,
+		}
+	}
+
+	var todos []Todo
+	// bytes -> json 変換
+	unms_err := json.Unmarshal(todos_bytes, &todos)
+	if unms_err != nil {
+		return todosLoadedMessage{
+			todos: nil,
+			Err: unms_err,
+		}
+	}
+
+	return todosLoadedMessage{
+		todos: todos,
+		Err: nil,
+	}
+}
+
+func saveTodosToFile(m model) {
+	for i := range m.todos {
+		m.todos[i].Done = false
+		_, ok := m.selected[i]
+		if ok {
+			m.todos[i].Done = true
+		}
+	}
+
+	todos_json, Err := json.MarshalIndent(m.todos, "", "    ")
+	if Err != nil {
+		fmt.Println(Err)
+		return
+	}
+	os.WriteFile("todo_list.json", todos_json, 0666)
+}
+
+// io init
 func (m model) Init() tea.Cmd {
-	// コマンドがない場合nil
-	return nil
+
+	// Sequenceで順に処理
+	return tea.Sequence(
+		loadTodos,
+	)
 }
 
 // model init
 func initialModel() model {
 	return model{
-		numbers:  []string{"one","two","three"},
+		todos:  []Todo{},
 
 		// 空のmapはmake()で作成
 		selected: make(map[int]struct{}),
@@ -219,6 +257,21 @@ func initialModel() model {
 // 操作があれば更新される
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case todosLoadedMessage:
+		if msg.Err != nil {
+			return m, tea.Quit
+		}
+		m.todos = msg.todos
+
+		for i := range m.todos {
+			if m.todos[i].Done == true {
+				m.selected[i] = struct{}{}
+			}
+		}
+		
+		return m, nil
+
 	// 更新時押されていたkey
 	case tea.KeyPressMsg:
 
@@ -234,7 +287,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "s":
-			if m.cursor < len(m.numbers) -1 {
+			if m.cursor < len(m.todos) -1 {
 				m.cursor++
 			}
 		case "enter":
@@ -254,15 +307,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// なければ, 存在boolをtrueにするために空の構造体を入れる
 				m.selected[m.cursor] = struct{}{}
 			}
+		case "t":
+			saveTodosToFile(m)
 		}
 	}
 	return m, nil
 }
 
 func (m model) View() tea.View {
-	s := "number select test\n\n"
+	s := "todo list\n\n"
 
-	for i, number := range m.numbers {
+	for i, todo := range m.todos {
 		cursor := " "
 		if m.cursor == i {
 			cursor = ">"
@@ -274,10 +329,10 @@ func (m model) View() tea.View {
 			selected = "✓"
 		}
 		// Sprintはto_stringへのformat
-		s += fmt.Sprintf("%s[%s] %s\n", cursor, selected, number)
+		s += fmt.Sprintf("%s[%s]%d: %s\n", cursor, selected, todo.ID, todo.Text)
 	} 
 
-	s += "\npress q to quit\n"
+	s += "\npress t to save\npress q to quit\n"
 
     // Send the UI for rendering
     return tea.NewView(s)
