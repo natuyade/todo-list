@@ -1,186 +1,27 @@
 package main
 
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"strconv"
-
-    tea "charm.land/bubbletea/v2"
-)
-
-type Todo struct {
-	ID int `json:"id"`
-	Text string `json:"text"`
-	Done bool `json:"done"`
-}
-
-func addTodo(todos []Todo, task string) {
-	todo := Todo{
-		ID: len(todos) + 1,
-		Text: task,
-		Done: false,
-	}
-
-	todos = append(todos, todo)
-
-	marshaled_todos, ms_err := json.MarshalIndent(todos, "", "    ")
-	if ms_err != nil {
-		fmt.Println(ms_err)
-		return
-	}
-
-	os.WriteFile("todo_list.json", marshaled_todos, 0666)
-}
-
-func deleteTodo(todos []Todo, id int) {
-	
-	result := []Todo{}
-	set_id := 1
-
-	for i, todo := range todos {
-
-		fmt.Println(set_id)
-		if todos[i].ID != id {
-
-			todo.ID = set_id
-			set_id += 1
-
-			result = append(result, todo)
-		}
-	}
-
-	marshaled_todos, ms_err := json.MarshalIndent(result, "", "    ")
-	if ms_err != nil {
-		fmt.Println(ms_err)
-		return
-	}
-
-	os.WriteFile("todo_list.json", marshaled_todos, 0666)
-}
-
-func completeTask(todos []Todo, id int) {
-
-	for i := range todos {
-
-		if todos[i].ID == id {
-			todos[i].Done = true
-			break
-		}
-	}
-
-	marshaled_todos, ms_err := json.MarshalIndent(todos, "", "    ")
-	if ms_err != nil {
-		fmt.Println(ms_err)
-		return
-	}
-
-	os.WriteFile("todo_list.json", marshaled_todos, 0666)
-}
-
-func printTodos(todos []Todo) {
-
-	for _, todo := range todos {
-
-		completed := " "
-		if todo.Done == true {
-			completed = "✓"
-		}
-
-		fmt.Printf("[%s]%d: %s\n", completed, todo.ID, todo.Text)
-	}
 	// %s 文字列
 	// %d 整数
 	// %v 適当な時
 	// %T 型
 	// %f 小数
 	// %t Bool
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+    tea "charm.land/bubbletea/v2"
+)
+
+type Todo struct {
+	Text string `json:"text"`
+	Done bool `json:"done"`
 }
-
-func argCommands(Args []string) {
-	todos := []Todo{}
-	if len(Args) <= 2 {
-		fmt.Println("Type: todo (list | add <task> | delete <id> | complete <id>)")
-		return
-	}
-	if Args[1] != "todo" {
-		fmt.Println("Type: todo (list | add <task> | delete <id> | complete <id>)")
-		return
-	}
-	commands := Args[2]
-
-	switch commands {
-	case "add":
-		if len(Args) <= 3 {
-			fmt.Println("Hint: add <task>")
-			return
-		}
-
-		task := Args[3]
-
-		fmt.Printf("add task \"%s\"\n", task)
-
-		addTodo(todos, task)
-
-		return
-
-	case "delete":
-		if len(Args) <= 3 {
-			fmt.Println("Hint: delete <id>")
-			return
-		}
-
-		id_string := Args[3]
-
-		id, conv_err := strconv.Atoi(id_string)
-		if conv_err != nil {
-			fmt.Println(conv_err)
-			return
-		}
-
-		deleteTodo(todos, id)
-
-		fmt.Printf("delete task id: %d\n", id)
-
-	case "complete":
-		if len(Args) <= 3 {
-			fmt.Println("Hint: complete <id>")
-			return
-		}
-
-		id_string := Args[3]
-
-		id, conv_err := strconv.Atoi(id_string)
-		if conv_err != nil {
-			fmt.Println(conv_err)
-			return
-		}
-
-		completeTask(todos, id)
-
-		fmt.Printf("complete task id: %d\n", id)
-
-	case "list":
-		fmt.Println("list")
-
-		printTodos(todos)
-
-		return
-
-	default:
-		fmt.Println("this command not found\nType: todo (list | add <task> | delete <id> | complete <id>)")
-	}
-}
-/*
-func main() {
-
-	arg_commands(os.Args)
-
-	fmt.Println("Finished")
-	
-}*/
 
 type model struct{
+	scenes []string
+	currentScene string
 	todos []Todo
 	cursor int
 	// mapはキーの型を自由に変えられる(stringならselected["yamada"]などで指定できる)
@@ -196,9 +37,14 @@ type todosLoadedMessage struct {
 func loadTodos() tea.Msg {
 	todos_bytes, read_err := os.ReadFile("todo_list.json")
 	if read_err != nil {
+		var first_todo = []Todo{}
+		first_todo = append(first_todo, Todo{
+			Text: "コミットする",
+			Done: false,
+		})
 		return todosLoadedMessage{
-			todos: nil,
-			Err: read_err,
+			todos: first_todo,
+			Err: nil,
 		}
 	}
 
@@ -247,8 +93,10 @@ func (m model) Init() tea.Cmd {
 // model init
 func initialModel() model {
 	return model{
-		todos:  []Todo{},
+		scenes: []string{"list","addtodo"},
+		currentScene: "list",
 
+		todos:  []Todo{},
 		// 空のmapはmake()で作成
 		selected: make(map[int]struct{}),
 	}
@@ -309,6 +157,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "t":
 			saveTodosToFile(m)
+		case "f":
+			if m.currentScene == "list" {
+				m.currentScene = "addtodo"
+			}
 		}
 	}
 	return m, nil
@@ -316,23 +168,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() tea.View {
 	s := "todo list\n\n"
+	switch m.currentScene{
 
-	for i, todo := range m.todos {
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
+	case "list":
+
+		for i, todo := range m.todos {
+			cursor := " "
+			if m.cursor == i {
+				cursor = ">"
+			}
+
+			selected := " "
+			_, ok := m.selected[i]
+			if ok {
+				selected = "✓"
+			}
+			// Sprintはto_stringへのformat
+			s += fmt.Sprintf("%s[%s] %s\n", cursor, selected, todo.Text)
 		}
+	
+	case "addtodo":
+		task := ""
+		s += fmt.Sprintf("enter todo: %s", task)
+		fmt.Scan(&task) // スペースまでの1単語を取得
+	}
 
-		selected := " "
-		_, ok := m.selected[i]
-		if ok {
-			selected = "✓"
-		}
-		// Sprintはto_stringへのformat
-		s += fmt.Sprintf("%s[%s]%d: %s\n", cursor, selected, todo.ID, todo.Text)
-	} 
-
-	s += "\npress t to save\npress q to quit\n"
+	s += "\npress t to save\npress f to addtodo\npress q to quit\n"
 
     // Send the UI for rendering
     return tea.NewView(s)
