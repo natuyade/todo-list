@@ -12,7 +12,8 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/bubbles/v2/textinput"
+	textinput "charm.land/bubbles/v2/textinput"
+	lipgloss "charm.land/lipgloss/v2"
 )
 
 type Todo struct {
@@ -102,9 +103,12 @@ func initialModel() model {
 	// text入力の場
 	ti := textinput.New()
 	// place holderは入力値がないときの仮テキスト
-	ti.Placeholder = "enter here"
 	// 十分なwidthを設定しないとplaceholderが見えなくなる
+	ti.Placeholder = "enter here"
+	// 大文字を考慮したwidthにすべき
 	ti.SetWidth(32)
+	ti.CharLimit = 16
+
 
 	return model{
 		scenes: []string{"list","addtodo"},
@@ -210,7 +214,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.ThickBorder()).
+		BorderForeground(lipgloss.Color("#e464f0")).
+		Margin(1).
+		Padding(1)
+	
 	s := "todo list\n\n"
+	h := "help\n----------------\n"
 	switch m.currentScene{
 
 	case "list":
@@ -229,17 +241,32 @@ func (m model) View() tea.View {
 			// Sprintはto_stringへのformat
 			s += fmt.Sprintf("%s[%s] %s\n", cursor, selected, todo.Text)
 		}
-		s += "\npress t to save\npress f to addtodo\npress q to quit\n"
+		h += "|t|Save |f|AddTodo |q|Quit"
 	
 	case "addtodo":
 		s += "enter new todo\n\n"
 		s += m.inputText.View() + "\n"
-		s += "\npress enter after write todo\npress esc to back the list\n"
+		h += "|Enter|AddTodo |esc|BackToList"
 	}
 
+	listLayer := boxStyle.Width(64).Height(32).Render(s)
+	layer_1 := lipgloss.NewLayer(listLayer).
+		X(0).Y(0)
 
-    // Send the UI for rendering
-    return tea.NewView(s)
+	helpLayer := boxStyle.Width(64).Height(8).Render(h)
+	layer_2 := lipgloss.NewLayer(helpLayer).
+		X(0).Y(33)
+
+	kariLayer := boxStyle.Width(64).Height(32).Render()
+	layer_3 := lipgloss.NewLayer(kariLayer).
+		X(65).Y(0)
+
+	output := lipgloss.NewCompositor(layer_1, layer_2, layer_3).Render()
+
+	view := tea.NewView(output)
+	view.AltScreen = true
+
+    return view
 }
 
 func main() {

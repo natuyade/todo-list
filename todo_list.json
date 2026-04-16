@@ -5,6 +5,22 @@
     },
     {
         "text": "テキストinputを学ぶ",
+        "done": true
+    },
+    {
+        "text": "borderで分けてみる",
+        "done": true
+    },
+    {
+        "text": "test",
+        "done": false
+    },
+    {
+        "text": "adsad",
+        "done": false
+    },
+    {
+        "text": "f",
         "done": false
     }
 ]
