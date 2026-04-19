@@ -117,12 +117,18 @@ func initialModel() model {
 	ti.SetWidth(32)
 	ti.CharLimit = 16
 
+	lineLayer := Layer{SizeX: 64, SizeY: 32, RenderS: "", PosX: 0, PosY: 0}
+	addTodoLayer := Layer{SizeX: 64, SizeY: 32, RenderS: "", PosX: 65, PosY: 0}
+	helpLayer := Layer{SizeX: 64, SizeY: 8, RenderS: "", PosX: 0, PosY: 33}
+
+	var layers []Layer
+	layers = append(layers, lineLayer, addTodoLayer, helpLayer)
 
 	return model{
 		enableLayer: 0,
 		// modelに持たせる
 		inputText: ti,
-
+		layers: layers,
 		todos: []Todo{},
 		// 空のmapはmake()で作成
 		selected: make(map[int]struct{}),
@@ -149,7 +155,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// 更新時押されていたkey
 	case tea.KeyPressMsg:
-
+		switch msg.String() {
+			case "tab":
+				m.enableLayer = (m.enableLayer + 1) % len(m.layers)
+				return m, nil
+			case "q", "ctrl+c":
+				// tea.Quitコマンドで終了
+				return m, tea.Quit
+		}
+		/*
 		switch m.enableLayer {
 		case 0:
 			switch msg.String() {
@@ -211,7 +225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputText.Blur()
 				return m, nil
 			}
-		}
+		}*/
 
 			var cmd tea.Cmd
 			m.inputText, cmd = m.inputText.Update(msg)
@@ -254,45 +268,25 @@ func (m model) View() tea.View {
 	case 1:
 		helpS += "|Enter|AddTodo |esc|BackToList"
 	}
+	var layerStrings []string
+	layerStrings = append(layerStrings, lineS, addtS, helpS)
 
-	// sizex,sizey,posx,posy
-	lineLayer := []int{64, 32, 0, 0}
-	addTodoLayer := []int{64, 32, 65, 0}
-	helpLayer := []int{64, 8, 0, 33}
-
-	layerString := []string{}
-	layerString = append(layerString, lineS, addtS, helpS)
-
-	layerSize := [][]int{}
-	layerSize = append(layerSize, lineLayer, addTodoLayer, helpLayer)
-
-	layerLen := len(layerString)
-	if layerLen < len(layerSize) {
-		layerLen = len(layerSize)
-	} 
-
-	layer := []Layer{}
-	for i := range layerLen {
-		layer = append(layer, Layer{
-			SizeX: layerSize[i][0],
-			SizeY: layerSize[i][1],
-			RenderS: layerString[i],
-			PosX: layerSize[i][2],
-			PosY: layerSize[i][3],
-		})
+	for i := range m.layers {
+		m.layers[i].RenderS = layerStrings[i]
 	}
-	m.layers = layer
 	
 	var newLayers []*lipgloss.Layer
-	for _, l := range m.layers {
+	for i, l := range m.layers {
+		borderColor := lipgloss.Magenta
+		if i == m.enableLayer {
+			borderColor = lipgloss.White
+		}
 		listLayer := boxStyle.Width(l.SizeX).Height(l.SizeY).
-			BorderForeground(lipgloss.Magenta).Render(l.RenderS)
+			BorderForeground(borderColor).Render(l.RenderS)
 		layer := lipgloss.NewLayer(listLayer).
 			X(l.PosX).Y(l.PosY)
 		newLayers = append(newLayers, layer)
 	}
-	
-//lipgloss.Color("#e464f0")
 
 	// 可変長引数が必要なものにスライスを渡す際は
 	// '...'を付けないと型不一致でエラーを吐く可能性がある
