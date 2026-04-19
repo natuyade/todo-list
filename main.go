@@ -21,15 +21,23 @@ type Todo struct {
 	Done bool `json:"done"`
 }
 
+type Layer struct {
+	SizeX int
+	SizeY int
+	RenderS string
+	PosX int
+	PosY int
+}
+
 type model struct{
-	scenes []string
-	currentScene string
 	inputText textinput.Model
 	todos []Todo
 	cursor int
 	// mapはキーの型を自由に変えられる(stringならselected["yamada"]などで指定できる)
 	// [int]がキーの型, struct{}は値の型
 	selected map[int]struct{}
+	layers []Layer
+	enableLayer int
 }
 
 type todosLoadedMessage struct {
@@ -111,8 +119,7 @@ func initialModel() model {
 
 
 	return model{
-		scenes: []string{"list","addtodo"},
-		currentScene: "list",
+		enableLayer: 0,
 		// modelに持たせる
 		inputText: ti,
 
@@ -143,8 +150,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// 更新時押されていたkey
 	case tea.KeyPressMsg:
 
-		switch m.currentScene {
-		case "list":
+		switch m.enableLayer {
+		case 0:
 			switch msg.String() {
 			// それがこのいずれかなら...
 			case "q", "ctrl+c":
@@ -180,27 +187,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "t":
 				saveTodosToFile(m)
 			case "f":
-				m.currentScene = "addtodo"
+				m.enableLayer = 1
 				m.inputText.Focus()
 				return m, nil
 			}
-		case "addtodo":
+		case 1:
 			switch msg.String() {
 			case "enter":
 				task := m.inputText.Value()
 				if task != "" {
 					m.todos = append(m.todos, Todo{
 						Text: task,
-						Done: false,
+						Done: false, 
 					})
 				}
 				m.inputText.SetValue("")
 				// blurをかけてfocusを解除
 				m.inputText.Blur()
-				m.currentScene = "list"
+				m.enableLayer = 0
 				return m, nil
 			case "esc":
-				m.currentScene = "list"
+				m.enableLayer = 0
 				m.inputText.Blur()
 				return m, nil
 			}
@@ -215,53 +222,81 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() tea.View {
 
+	//windowSize := tea.RequestWindowSize()
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
-		BorderForeground(lipgloss.Color("#e464f0")).
 		Margin(1).
 		Padding(1)
 	
-	s := "todo list\n\n"
-	h := "help\n----------------\n"
-	switch m.currentScene{
-
-	case "list":
-
-		for i, todo := range m.todos {
-			cursor := " "
-			if m.cursor == i {
-				cursor = ">"
-			}
-
-			selected := " "
-			_, ok := m.selected[i]
-			if ok {
-				selected = "✓"
-			}
-			// Sprintはto_stringへのformat
-			s += fmt.Sprintf("%s[%s] %s\n", cursor, selected, todo.Text)
+	lineS := "todo list\n\n"
+	for i, todo := range m.todos {
+		cursor := " "
+		if m.cursor == i {
+			cursor = ">"
 		}
-		h += "|t|Save |f|AddTodo |q|Quit"
-	
-	case "addtodo":
-		s += "enter new todo\n\n"
-		s += m.inputText.View() + "\n"
-		h += "|Enter|AddTodo |esc|BackToList"
+
+		selected := " "
+		_, ok := m.selected[i]
+		if ok {
+			selected = "✓"
+		}
+		// Sprintはto_stringへのformat
+		lineS += fmt.Sprintf("%s[%s] %s\n", cursor, selected, todo.Text)
 	}
 
-	listLayer := boxStyle.Width(64).Height(32).Render(s)
-	layer_1 := lipgloss.NewLayer(listLayer).
-		X(0).Y(0)
+	addtS := "enter new todo\n\n"
+	addtS += m.inputText.View() + "\n"
+	
+	helpS := "help\n----------------\n"
+	switch m.enableLayer{
+	case 0:
+		helpS += "|t|Save |f|AddTodo |q|Quit"
+	case 1:
+		helpS += "|Enter|AddTodo |esc|BackToList"
+	}
 
-	helpLayer := boxStyle.Width(64).Height(8).Render(h)
-	layer_2 := lipgloss.NewLayer(helpLayer).
-		X(0).Y(33)
+	// sizex,sizey,posx,posy
+	lineLayer := []int{64, 32, 0, 0}
+	addTodoLayer := []int{64, 32, 65, 0}
+	helpLayer := []int{64, 8, 0, 33}
 
-	kariLayer := boxStyle.Width(64).Height(32).Render()
-	layer_3 := lipgloss.NewLayer(kariLayer).
-		X(65).Y(0)
+	layerString := []string{}
+	layerString = append(layerString, lineS, addtS, helpS)
 
-	output := lipgloss.NewCompositor(layer_1, layer_2, layer_3).Render()
+	layerSize := [][]int{}
+	layerSize = append(layerSize, lineLayer, addTodoLayer, helpLayer)
+
+	layerLen := len(layerString)
+	if layerLen < len(layerSize) {
+		layerLen = len(layerSize)
+	} 
+
+	layer := []Layer{}
+	for i := range layerLen {
+		layer = append(layer, Layer{
+			SizeX: layerSize[i][0],
+			SizeY: layerSize[i][1],
+			RenderS: layerString[i],
+			PosX: layerSize[i][2],
+			PosY: layerSize[i][3],
+		})
+	}
+	m.layers = layer
+	
+	var newLayers []*lipgloss.Layer
+	for _, l := range m.layers {
+		listLayer := boxStyle.Width(l.SizeX).Height(l.SizeY).
+			BorderForeground(lipgloss.Magenta).Render(l.RenderS)
+		layer := lipgloss.NewLayer(listLayer).
+			X(l.PosX).Y(l.PosY)
+		newLayers = append(newLayers, layer)
+	}
+	
+//lipgloss.Color("#e464f0")
+
+	// 可変長引数が必要なものにスライスを渡す際は
+	// '...'を付けないと型不一致でエラーを吐く可能性がある
+	output := lipgloss.NewCompositor(newLayers...).Render()
 
 	view := tea.NewView(output)
 	view.AltScreen = true
