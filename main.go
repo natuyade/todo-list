@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"os"
 
-	tea "charm.land/bubbletea/v2"
 	textinput "charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 )
 
@@ -117,12 +117,18 @@ func initialModel() model {
 	ti.SetWidth(32)
 	ti.CharLimit = 16
 
-	lineLayer := Layer{SizeX: 64, SizeY: 32, RenderS: "", PosX: 0, PosY: 0}
-	addTodoLayer := Layer{SizeX: 64, SizeY: 32, RenderS: "", PosX: 65, PosY: 0}
-	helpLayer := Layer{SizeX: 64, SizeY: 8, RenderS: "", PosX: 0, PosY: 33}
+	lineLayer := Layer{SizeX: 41, SizeY: 32, RenderS: "", PosX: 0, PosY: 0}
+	addTodoLayer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes1Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes2Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes3Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes4Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes5Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	tes6Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
+	helpLayer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
 
 	var layers []Layer
-	layers = append(layers, lineLayer, addTodoLayer, helpLayer)
+	layers = append(layers, lineLayer, addTodoLayer, tes1Layer, tes2Layer, tes3Layer, tes4Layer, tes5Layer, tes6Layer, helpLayer)
 
 	return model{
 		enableLayer: 0,
@@ -138,6 +144,21 @@ func initialModel() model {
 // 操作があれば更新される
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		for i := range m.layers {
+			if i != 0 {
+				if m.layers[i - 1].PosX + m.layers[i - 1].SizeX + m.layers[i].SizeX + 1 > msg.Width {
+					m.layers[i].PosX = m.layers[0].SizeX + 1
+					m.layers[i].PosY = m.layers[i - 1].PosY + m.layers[i - 1].SizeY + 1
+				} else {
+					m.layers[i].PosX = m.layers[i - 1].PosX + m.layers[i - 1].SizeX + 1
+					m.layers[i].PosY = m.layers[i - 1].PosY
+				}
+			} else {
+				m.layers[i].SizeY = msg.Height - 1
+			}
+		}
 
 	case todosLoadedMessage:
 		if msg.Err != nil {
@@ -155,91 +176,84 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// 更新時押されていたkey
 	case tea.KeyPressMsg:
+		// 0=list 1=addtodo +1=help
 		switch msg.String() {
 			case "tab":
-				m.enableLayer = (m.enableLayer + 1) % len(m.layers)
-				return m, nil
-			case "q", "ctrl+c":
-				// tea.Quitコマンドで終了
-				return m, tea.Quit
-		}
-		/*
-		switch m.enableLayer {
-		case 0:
-			switch msg.String() {
-			// それがこのいずれかなら...
-			case "q", "ctrl+c":
-				// tea.Quitコマンドで終了
-				return m, tea.Quit
-			
-			case "up", "w":
-				if m.cursor > 0 {
-					m.cursor--
+				switch m.enableLayer {
+				case 0:
+					m.inputText.Focus()
+				case 1:
+					m.inputText.Blur()
 				}
-
-			case "down", "s":
-				if m.cursor < len(m.todos) -1 {
-					m.cursor++
-				}
-			case "enter":
-				// selected[key]に値が存在しているかを二つ目のvalueでみれる
-				// 存在していればtrue, いなければfalseが返る.
-
-				// boolで切り替えればいいのではとか思ったけど,
-				// 中身を取り出してboolを得るより外から中身の存在だけでboolを得れるため
-				// この方法が使われてるのだと思う. 多分だけど...
-
-				// 中身のvalueはどうでもいいので, 存在だけを確かめる
-				_, ok := m.selected[m.cursor]
-				if ok {
-					// 中身があればdelete(mapType, key)の値を削除
-					delete(m.selected, m.cursor)
-				} else {
-					// なければ, 存在boolをtrueにするために空の構造体を入れる
-					m.selected[m.cursor] = struct{}{}
-				}
-			case "t":
-				saveTodosToFile(m)
-			case "f":
-				m.enableLayer = 1
-				m.inputText.Focus()
-				return m, nil
-			}
-		case 1:
-			switch msg.String() {
-			case "enter":
-				task := m.inputText.Value()
-				if task != "" {
-					m.todos = append(m.todos, Todo{
-						Text: task,
-						Done: false, 
-					})
-				}
-				m.inputText.SetValue("")
-				// blurをかけてfocusを解除
-				m.inputText.Blur()
-				m.enableLayer = 0
+				m.enableLayer = min(m.enableLayer + 1, len(m.layers) - 2)
 				return m, nil
 			case "esc":
-				m.enableLayer = 0
-				m.inputText.Blur()
+				switch m.enableLayer {
+				case 1:
+					m.inputText.Blur()
+				case 2:
+					m.inputText.Focus()
+				}
+				m.enableLayer = max(m.enableLayer - 1, 0)
 				return m, nil
-			}
-		}*/
+			case "q", "ctrl+c":
+				// tea.Quitコマンドで終了
+				return m, tea.Quit
+			case "enter":
+				switch m.enableLayer {
+				case 0:
+					_, ok := m.selected[m.cursor]
+					if ok {
+						delete(m.selected, m.cursor)
+					} else {
+						m.selected[m.cursor] = struct{}{}
+					}
+				case 1:
+					task := m.inputText.Value()
+					if task != "" {
+						m.todos = append(m.todos, Todo{
+							Text: task,
+							Done: false, 
+						})
+					}
+					m.inputText.SetValue("")
+					m.inputText.Blur()
+					m.enableLayer = 0
+					return m, nil
+				}
+			case "up", "w":
+				switch m.enableLayer{
+				case 0:
+					if m.cursor > 0 {
+						m.cursor--
+					}
+				}
+			case "down", "s":
+				switch m.enableLayer{
+				case 0:
+					if m.cursor < len(m.todos) -1 {
+						m.cursor++
+					}
+				}
+			case "t":
+				switch m.enableLayer {
+				case 0:
+					saveTodosToFile(m)
+				}
+		}
 
-			var cmd tea.Cmd
-			m.inputText, cmd = m.inputText.Update(msg)
-			return m, cmd
+		var cmd tea.Cmd
+		m.inputText, cmd = m.inputText.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
 
 func (m model) View() tea.View {
 
-	//windowSize := tea.RequestWindowSize()
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
-		Margin(1).
+		Margin(-1).
 		Padding(1)
 	
 	lineS := "todo list\n\n"
@@ -254,22 +268,22 @@ func (m model) View() tea.View {
 		if ok {
 			selected = "✓"
 		}
-		// Sprintはto_stringへのformat
+		// Sprintはstringへのformat
 		lineS += fmt.Sprintf("%s[%s] %s\n", cursor, selected, todo.Text)
 	}
 
 	addtS := "enter new todo\n\n"
 	addtS += m.inputText.View() + "\n"
 	
-	helpS := "help\n----------------\n"
+	helpS := "help\n----------------\n|tab|Next |esc|Prev |q|Quit "
 	switch m.enableLayer{
 	case 0:
-		helpS += "|t|Save |f|AddTodo |q|Quit"
+		helpS += "|t|Save"
 	case 1:
-		helpS += "|Enter|AddTodo |esc|BackToList"
+		helpS += "|Enter|AddTodo"
 	}
 	var layerStrings []string
-	layerStrings = append(layerStrings, lineS, addtS, helpS)
+	layerStrings = append(layerStrings, lineS, addtS, "", "", "", "", "", "", helpS)
 
 	for i := range m.layers {
 		m.layers[i].RenderS = layerStrings[i]
