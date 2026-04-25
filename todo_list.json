@@ -8,19 +8,7 @@
         "done": true
     },
     {
-        "text": "borderで分けてみる",
+        "text": "完了したタスクを削除する",
         "done": true
-    },
-    {
-        "text": "test",
-        "done": false
-    },
-    {
-        "text": "adsad",
-        "done": false
-    },
-    {
-        "text": "f",
-        "done": false
     }
 ]

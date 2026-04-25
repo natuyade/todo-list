@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	textinput "charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -38,6 +39,7 @@ type model struct{
 	selected map[int]struct{}
 	layers []Layer
 	enableLayer int
+	logs []string
 }
 
 type todosLoadedMessage struct {
@@ -96,6 +98,31 @@ func saveTodosToFile(m model) {
 	os.WriteFile("todo_list.json", todos_json, 0666)
 }
 
+func deleteTodo(m model) model {
+	result := []Todo{}
+	for i, todo := range m.todos {
+		_, ok := m.selected[i]
+		if ok {
+			delete(m.selected, i)
+			continue
+		}
+		result = append(result, todo)
+	}
+	m.todos = result
+
+	return m
+}
+
+func pushToLog(m model, log string) model {
+	now := time.Now()
+	nowString := now.Format("15:04:05")
+
+	logS := fmt.Sprintf("[%s]%s", nowString, log)
+	m.logs = append(m.logs, logS)
+
+	return m
+}
+
 // io init
 func (m model) Init() tea.Cmd {
 
@@ -117,6 +144,7 @@ func initialModel() model {
 	ti.SetWidth(32)
 	ti.CharLimit = 16
 
+	// layerが何枚になるかを初期の時点で決めておきたいのでここである程度作成
 	lineLayer := Layer{SizeX: 41, SizeY: 32, RenderS: "", PosX: 0, PosY: 0}
 	addTodoLayer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
 	tes1Layer := Layer{SizeX: 42, SizeY: 8, RenderS: "", PosX: 0, PosY: 0}
@@ -146,6 +174,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
+		m.layers[0].SizeY = msg.Height - 1
 		for i := range m.layers {
 			if i != 0 {
 				if m.layers[i - 1].PosX + m.layers[i - 1].SizeX + m.layers[i].SizeX + 1 > msg.Width {
@@ -155,9 +184,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.layers[i].PosX = m.layers[i - 1].PosX + m.layers[i - 1].SizeX + 1
 					m.layers[i].PosY = m.layers[i - 1].PosY
 				}
-			} else {
-				m.layers[i].SizeY = msg.Height - 1
 			}
+			
 		}
 
 	case todosLoadedMessage:
@@ -235,10 +263,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.cursor++
 					}
 				}
+			case "d":
+				switch m.enableLayer{
+				case 0:
+					m = deleteTodo(m)
+					m = pushToLog(m, "deleted complete task")
+				}
 			case "t":
 				switch m.enableLayer {
 				case 0:
 					saveTodosToFile(m)
+					m = pushToLog(m, "saved to file")
 				}
 		}
 
@@ -274,16 +309,21 @@ func (m model) View() tea.View {
 
 	addtS := "enter new todo\n\n"
 	addtS += m.inputText.View() + "\n"
+
+	logS := ""
+	for i := len(m.logs); i != 0; i-- {
+		logS += fmt.Sprintf("%s\n", m.logs[i - 1])
+	}
 	
 	helpS := "help\n----------------\n|tab|Next |esc|Prev |q|Quit "
 	switch m.enableLayer{
 	case 0:
-		helpS += "|t|Save"
+		helpS += "|t|Save |d|DeleteCompTodo"
 	case 1:
 		helpS += "|Enter|AddTodo"
 	}
 	var layerStrings []string
-	layerStrings = append(layerStrings, lineS, addtS, "", "", "", "", "", "", helpS)
+	layerStrings = append(layerStrings, lineS, addtS, logS, "", "", "", "", "", helpS)
 
 	for i := range m.layers {
 		m.layers[i].RenderS = layerStrings[i]
