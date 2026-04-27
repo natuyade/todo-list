@@ -17,6 +17,8 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 )
 
+const Description = "私natuyadeがGo言語に慣れるため\n色々適当に触ってあそんでます.\n課題まみれでよく頭を抱えてます\n；；"
+
 type Todo struct {
 	Text string `json:"text"`
 	Done bool `json:"done"`
@@ -109,6 +111,7 @@ func deleteTodo(m model) model {
 		result = append(result, todo)
 	}
 	m.todos = result
+	m.cursor = 0
 
 	return m
 }
@@ -311,8 +314,17 @@ func (m model) View() tea.View {
 	addtS += m.inputText.View() + "\n"
 
 	logS := ""
+	limit := 0
 	for i := len(m.logs); i != 0; i-- {
-		logS += fmt.Sprintf("%s\n", m.logs[i - 1])
+		limit += 1
+		if limit > 4 {
+			break
+		}
+
+		if i != len(m.logs) {
+			logS += "\n"
+		}
+		logS += fmt.Sprintf("%s", m.logs[i - 1])
 	}
 	
 	helpS := "help\n----------------\n|tab|Next |esc|Prev |q|Quit "
@@ -323,7 +335,7 @@ func (m model) View() tea.View {
 		helpS += "|Enter|AddTodo"
 	}
 	var layerStrings []string
-	layerStrings = append(layerStrings, lineS, addtS, logS, "", "", "", "", "", helpS)
+	layerStrings = append(layerStrings, lineS, addtS, logS, "", "", "", "", Description, helpS)
 
 	for i := range m.layers {
 		m.layers[i].RenderS = layerStrings[i]
@@ -333,7 +345,7 @@ func (m model) View() tea.View {
 	for i, l := range m.layers {
 		borderColor := lipgloss.Magenta
 		if i == m.enableLayer {
-			borderColor = lipgloss.White
+			borderColor = lipgloss.BrightMagenta
 		}
 		listLayer := boxStyle.Width(l.SizeX).Height(l.SizeY).
 			BorderForeground(borderColor).Render(l.RenderS)
