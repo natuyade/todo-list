@@ -1,14 +1,10 @@
 [
     {
-        "text": "コミットする",
-        "done": true
+        "text": "dfghdghdfg",
+        "done": false
     },
     {
-        "text": "テキストinputを学ぶ",
-        "done": true
-    },
-    {
-        "text": "完了したタスクを削除する",
-        "done": true
+        "text": "sdfgdasf",
+        "done": false
     }
 ]

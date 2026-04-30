@@ -36,9 +36,6 @@ type model struct{
 	inputText textinput.Model
 	todos []Todo
 	cursor int
-	// mapはキーの型を自由に変えられる(stringならselected["yamada"]などで指定できる)
-	// [int]がキーの型, struct{}は値の型
-	selected map[int]struct{}
 	layers []Layer
 	enableLayer int
 	logs []string
@@ -46,6 +43,10 @@ type model struct{
 
 type todosLoadedMessage struct {
 	todos []Todo
+	Err error
+}
+
+type todosSavedMessage struct {
 	Err error
 }
 
@@ -83,35 +84,26 @@ func loadTodos() tea.Msg {
 	}
 }
 
-func saveTodosToFile(m model) {
-	for i := range m.todos {
-		m.todos[i].Done = false
-		_, ok := m.selected[i]
-		if ok {
-			m.todos[i].Done = true
-		}
-	}
+func saveTodosToFile(m model) tea.Msg {
 
-	todos_json, Err := json.MarshalIndent(m.todos, "", "    ")
-	if Err != nil {
-		fmt.Println(Err)
-		return
+	todos_json, err := json.MarshalIndent(m.todos, "", "    ")
+	if err != nil {
+		return todosSavedMessage {Err: err}
 	}
-	os.WriteFile("todo_list.json", todos_json, 0666)
+	err = os.WriteFile("todo_list.json", todos_json, 0666)
+	return todosSavedMessage {Err: err}
 }
 
-func deleteTodo(m model) model {
+func deleteCompTodo(m model) model {
 	result := []Todo{}
 	for i, todo := range m.todos {
-		_, ok := m.selected[i]
-		if ok {
-			delete(m.selected, i)
+		
+		if m.todos[i].Done {
 			continue
 		}
 		result = append(result, todo)
 	}
 	m.todos = result
-	m.cursor = 0
 
 	return m
 }
@@ -167,8 +159,6 @@ func initialModel() model {
 		inputText: ti,
 		layers: layers,
 		todos: []Todo{},
-		// 空のmapはmake()で作成
-		selected: make(map[int]struct{}),
 	}
 }
 
@@ -197,13 +187,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.todos = msg.todos
 
-		for i := range m.todos {
-			if m.todos[i].Done == true {
-				m.selected[i] = struct{}{}
-			}
-		}
-		
 		return m, nil
+	
+	case todosSavedMessage:
+		if msg.Err != nil {
+			// string算
+			m = pushToLog(m, "save failed: "+msg.Err.Error())
+		} else {
+			m = pushToLog(m, "saved to file")
+		}
 
 	// 更新時押されていたkey
 	case tea.KeyPressMsg:
@@ -233,11 +225,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				switch m.enableLayer {
 				case 0:
-					_, ok := m.selected[m.cursor]
-					if ok {
-						delete(m.selected, m.cursor)
+					if len(m.todos) == 0 {
+						return m, nil
+					}
+					
+					if m.todos[m.cursor].Done {
+						m.todos[m.cursor].Done = false
 					} else {
-						m.selected[m.cursor] = struct{}{}
+						m.todos[m.cursor].Done = true
+					}
+					
+					// Updateが欲しい型はmodelとtea.Cmdなので
+					// /*無名関数*/func() tea.Msg{return msg}でtea.Cmdとして返している
+					return m, func() tea.Msg {
+						return saveTodosToFile(m)
 					}
 				case 1:
 					task := m.inputText.Value()
@@ -250,7 +251,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.inputText.SetValue("")
 					m.inputText.Blur()
 					m.enableLayer = 0
-					return m, nil
+
+					return m, func() tea.Msg {
+						return saveTodosToFile(m)
+					}
 				}
 			case "up", "w":
 				switch m.enableLayer{
@@ -269,14 +273,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				switch m.enableLayer{
 				case 0:
-					m = deleteTodo(m)
+					m = deleteCompTodo(m)
 					m = pushToLog(m, "deleted complete task")
-				}
-			case "t":
-				switch m.enableLayer {
-				case 0:
-					saveTodosToFile(m)
-					m = pushToLog(m, "saved to file")
+
+					m.cursor = 0
+
+					return m, func() tea.Msg {
+						return saveTodosToFile(m)
+					}
 				}
 		}
 
@@ -302,8 +306,7 @@ func (m model) View() tea.View {
 		}
 
 		selected := " "
-		_, ok := m.selected[i]
-		if ok {
+		if m.todos[i].Done {
 			selected = "✓"
 		}
 		// Sprintはstringへのformat
