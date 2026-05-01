@@ -39,6 +39,7 @@ type model struct{
 	layers []Layer
 	enableLayer int
 	logs []string
+	errMessage error
 }
 
 type todosLoadedMessage struct {
@@ -183,7 +184,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case todosLoadedMessage:
 		if msg.Err != nil {
-			return m, tea.Quit
+			m.errMessage = msg.Err
+			return m, nil
 		}
 		m.todos = msg.todos
 
@@ -354,6 +356,22 @@ func (m model) View() tea.View {
 			BorderForeground(borderColor).Render(l.RenderS)
 		layer := lipgloss.NewLayer(listLayer).
 			X(l.PosX).Y(l.PosY)
+		newLayers = append(newLayers, layer)
+	}
+	// 仮エラー
+	// m.errMessage = fmt.Errorf("errordesu!!errordayo!!!errordesu!!errordayo!!!errordesu!!errordayo!!!errordesu!!errordayo!!!")
+	
+	if m.errMessage != nil {
+
+		errLayer := boxStyle.Width(64).Height(24).
+		BorderStyle(lipgloss.DoubleBorder()).
+		BorderBackground(lipgloss.Alpha(lipgloss.BrightRed, 0.4)).
+		Background(lipgloss.Alpha(lipgloss.BrightRed, 0.1)).
+		Margin(1).Padding(1).
+		Align(lipgloss.Center).
+		Render("error:\n"+m.errMessage.Error()+"\nType|q|or|ctrl+c|to quit")
+		layer := lipgloss.NewLayer(errLayer).
+			X(2).Y(2)
 		newLayers = append(newLayers, layer)
 	}
 
